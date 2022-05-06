@@ -5,11 +5,15 @@ from datetime import datetime, timedelta
 import hashlib
 from functools import wraps
 import logging
+import os
 
 client = MongoClient('mongodb:27017')
 logging.basicConfig(level=logging.DEBUG)
 app = Flask(__name__)
 
+SECRET_KEY = os.environ['SECRET_KEY']
+EXP_TOKEN = int(os.environ['EXP_TOKEN'])
+app.logger.info(f"SECRET KEY: {SECRET_KEY} EXPIRATION: {EXP_TOKEN}")
 
 @app.route('/signup', methods=["POST"])
 def signup():
@@ -50,8 +54,8 @@ def signin():
         if db.user.find_one(query):
             token = jwt.encode({
                 'public_id': user['username'],
-                'exp' : datetime.utcnow() + timedelta(minutes = 1)
-                }, "secret_key")
+                'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
+                }, SECRET_KEY)
             return make_response(jsonify({'token' : token}), 201)
         else:
             return jsonify({"message":"usuario o contraseña incorrectos"})
@@ -71,7 +75,7 @@ def verify_token():
     }
     
     try:
-        decoded_token = jwt.decode(verified['token'], 'secret_key', algorithms="HS256")
+        decoded_token = jwt.decode(verified['token'], SECRET_KEY, algorithms="HS256")
         app.logger.info(decoded_token)
         if (decoded_token['public_id'] == verified['public_id']) and is_valid(decoded_token['exp']):
             return make_response(jsonify({'public_id' : decoded_token['public_id']}), 200)
