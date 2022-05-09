@@ -17,7 +17,6 @@ app = Flask(__name__)
 SECRET_KEY = os.environ['SECRET_KEY']
 EXP_TOKEN = int(os.environ['EXP_TOKEN'])
 NAME_SERVICE = os.environ['NAME_SERVICE']
-
 app.logger.info(f"SECRET KEY: {SECRET_KEY} EXPIRATION: {EXP_TOKEN}")
 
 @app.route('/signup', methods=["POST"])
@@ -116,7 +115,44 @@ def recover_password():
          else:
             return jsonify({"message":"email no encontrado"})
 
+@app.route('/change_password', methods=["POST"])
+def change_password():
 
+     user = {
+         "password": request.json['password'],
+         "token": request.json['token']
+     }
+     
+     decoded_token = jwt.decode(user['token'], SECRET_KEY, algorithms="HS256")
+
+     m = hashlib.new('sha256')
+     m.update(request.json['password'].encode('utf-8'))
+     hashed_password = m.hexdigest()
+     if hashed_password == decoded_token['old_password']:
+         return jsonify({"message":"cannot use the same password"})
+     
+     with MongoClient('mongodb:27017') as client:
+         db = client.users
+         query = {"email":decoded_token['email']}
+         query_result = db.user.find_one(query)
+
+         if not query_result:
+             return make_response(jsonify({'message' : 'not found'}), 404)
+
+         elif query_result['password'] == decoded_token['old_password']:
+             update_query = {"$set": {"email":decoded_token['email']
+                                      , "password": hashed_password}}
+             db.user.update_one(query, update_query)
+             return jsonify({"message":"usuario actualizado"})
+
+         else:
+             return make_response(jsonify({'message' : 'token invalid'}), 403)
+
+         
+
+
+
+            
 def init_database():
     pass
 
