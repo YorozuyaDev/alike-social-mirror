@@ -93,7 +93,30 @@ def verify_token():
     except Exception as error:
         app.logger.error(error)
         return make_response(jsonify({'message' : 'unauthorized'}), 401)
-                                   
+
+
+@app.route('/recover_password', methods=["GET"])
+def recover_password():
+     user = {
+        "email": request.json['email'],
+     }
+    
+     with MongoClient('mongodb:27017') as client:
+         db = client.users
+         query = {"email":user['email']}
+         query_result = db.user.find_one(query)
+         
+         if query_result :
+            token = jwt.encode({
+                'email': user['email'],
+                'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
+                'old_password': query_result['password']
+            }, SECRET_KEY)
+            return make_response(jsonify({'token' : token}), 201)
+         else:
+            return jsonify({"message":"email no encontrado"})
+
+
 def init_database():
     pass
 
