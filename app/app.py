@@ -17,6 +17,7 @@ app = Flask(__name__)
 SECRET_KEY = os.environ['SECRET_KEY']
 EXP_TOKEN = int(os.environ['EXP_TOKEN'])
 NAME_SERVICE = os.environ['NAME_SERVICE']
+
 app.logger.info(f"SECRET KEY: {SECRET_KEY} EXPIRATION: {EXP_TOKEN}")
 
 @app.route('/signup', methods=["POST"])
