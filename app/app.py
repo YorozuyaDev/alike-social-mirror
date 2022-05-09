@@ -93,7 +93,67 @@ def verify_token():
     except Exception as error:
         app.logger.error(error)
         return make_response(jsonify({'message' : 'unauthorized'}), 401)
-                                   
+
+
+@app.route('/recover_password', methods=["GET"])
+def recover_password():
+     user = {
+        "email": request.json['email'],
+     }
+    
+     with MongoClient('mongodb:27017') as client:
+         db = client.users
+         query = {"email":user['email']}
+         query_result = db.user.find_one(query)
+         
+         if query_result :
+            token = jwt.encode({
+                'email': user['email'],
+                'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
+                'old_password': query_result['password']
+            }, SECRET_KEY)
+            return make_response(jsonify({'token' : token}), 201)
+         else:
+            return jsonify({"message":"email no encontrado"})
+
+@app.route('/change_password', methods=["POST"])
+def change_password():
+
+     user = {
+         "password": request.json['password'],
+         "token": request.json['token']
+     }
+     
+     decoded_token = jwt.decode(user['token'], SECRET_KEY, algorithms="HS256")
+
+     m = hashlib.new('sha256')
+     m.update(request.json['password'].encode('utf-8'))
+     hashed_password = m.hexdigest()
+     if hashed_password == decoded_token['old_password']:
+         return jsonify({"message":"cannot use the same password"})
+     
+     with MongoClient('mongodb:27017') as client:
+         db = client.users
+         query = {"email":decoded_token['email']}
+         query_result = db.user.find_one(query)
+
+         if not query_result:
+             return make_response(jsonify({'message' : 'not found'}), 404)
+
+         elif query_result['password'] == decoded_token['old_password']:
+             update_query = {"$set": {"email":decoded_token['email']
+                                      , "password": hashed_password}}
+             db.user.update_one(query, update_query)
+             return jsonify({"message":"usuario actualizado"})
+
+         else:
+             return make_response(jsonify({'message' : 'token invalid'}), 403)
+
+         
+
+
+
+            
 def init_database():
     pass
 
