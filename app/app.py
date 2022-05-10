@@ -10,7 +10,7 @@ import json
 import requests
 import statusboard as stb
 
-client = MongoClient('mongodb:27017')
+client = MongoClient('alike-mongodb:27017')
 logging.basicConfig(level=logging.DEBUG)
 app = Flask(__name__)
 
@@ -149,9 +149,6 @@ def change_password():
              return make_response(jsonify({'message' : 'token invalid'}), 403)
 
          
-
-
-
             
 def init_database():
     pass
