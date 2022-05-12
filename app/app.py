@@ -10,15 +10,19 @@ import json
 import requests
 import statusboard as stb
 
-client = MongoClient('alike-mongodb:27017')
+
 logging.basicConfig(level=logging.DEBUG)
 app = Flask(__name__)
 
 SECRET_KEY = os.environ['SECRET_KEY']
 EXP_TOKEN = int(os.environ['EXP_TOKEN'])
 NAME_SERVICE = os.environ['NAME_SERVICE']
+DB_ENDPOINT = 'alike-mongodb'
+DB_PORT = int(os.environ['DB_PORT'])
+
 
 app.logger.info(f"SECRET KEY: {SECRET_KEY} EXPIRATION: {EXP_TOKEN}")
+app.logger.info(f"DB CONNECTED: {DB_ENDPOINT}")
 
 @app.route('/signup', methods=["POST"])
 def signup():
@@ -34,10 +38,11 @@ def signup():
             "verified": False
         }
 
-        with MongoClient('mongodb:27017') as client:
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
             db = client.users
             db.user.insert_one(new_user);
             return jsonify({'message':'user added'})
+
     except Exception as error:
         logging.info(error)
         return 'error'
@@ -54,7 +59,7 @@ def signin():
         "password": request.json['password'],
     }
     
-    with MongoClient('mongodb:27017') as client:
+    with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
         query = {"username":user['username'], "password": hashed_password}
         
@@ -78,15 +83,14 @@ def verify_token():
         else:
             return False
         
-    verified = {
-        'public_id': request.json['public_id'],
-        'token': request.json['token'],
-    }
+  
+    token = request.headers.get('Authorization')
     
+    app.logger.info(token)
     try:
-        decoded_token = jwt.decode(verified['token'], SECRET_KEY, algorithms="HS256")
+        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
         app.logger.info(decoded_token)
-        if (decoded_token['public_id'] == verified['public_id']) and is_valid(decoded_token['exp']):
+        if is_valid(decoded_token['exp']):
             return make_response(jsonify({'public_id' : decoded_token['public_id']}), 200)
         else:
              return make_response(jsonify({'message' : 'unauthorized'}), 401)
@@ -101,30 +105,31 @@ def recover_password():
         "email": request.json['email'],
      }
     
-     with MongoClient('mongodb:27017') as client:
+     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
          db = client.users
          query = {"email":user['email']}
          query_result = db.user.find_one(query)
-         
+        
          if query_result :
-            token = jwt.encode({
-                'email': user['email'],
-                'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
-                'old_password': query_result['password']
-            }, SECRET_KEY)
-            return make_response(jsonify({'token' : token}), 201)
+             token = jwt.encode({
+                 'email': user['email'],
+                 'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
+                 'old_password': query_result['password']
+             }, SECRET_KEY)
+             return make_response(jsonify({'token' : token}), 201)
          else:
-            return jsonify({"message":"email no encontrado"})
+             return jsonify({"message":"email no encontrado"})
 
 @app.route('/change_password', methods=["POST"])
 def change_password():
 
-     user = {
+    token = request.headers.get('Authorization')
+
+    user = {
          "password": request.json['password'],
-         "token": request.json['token']
-     }
+    }
      
-     decoded_token = jwt.decode(user['token'], SECRET_KEY, algorithms="HS256")
+     decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
 
      m = hashlib.new('sha256')
      m.update(request.json['password'].encode('utf-8'))
@@ -132,7 +137,7 @@ def change_password():
      if hashed_password == decoded_token['old_password']:
          return jsonify({"message":"cannot use the same password"})
      
-     with MongoClient('mongodb:27017') as client:
+     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
          db = client.users
          query = {"email":decoded_token['email']}
          query_result = db.user.find_one(query)
