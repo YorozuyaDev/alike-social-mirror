@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request, make_response
+from jsonschema import validate, ValidationError
 from pymongo import MongoClient
 import jwt
 from datetime import datetime, timedelta
@@ -24,6 +25,23 @@ DB_PORT = int(os.environ['DB_PORT'])
 app.logger.info(f"SECRET KEY: {SECRET_KEY} EXPIRATION: {EXP_TOKEN}")
 app.logger.info(f"DB CONNECTED: {DB_ENDPOINT}")
 
+
+signup_schema = {
+    "type":"object",
+    "properties": {
+        "username": {"type": "string"},
+        "password": {
+            "type":"string",
+            "pattern":'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,15}$'
+            },
+        "email": {
+            "type": "string",
+            "pattern": '^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$'
+        },
+    }
+}
+        
+
 @app.route('/signup', methods=["POST"])
 def signup():
     stb.notify(NAME_SERVICE)
@@ -33,19 +51,27 @@ def signup():
         hashed_password = m.hexdigest()
         new_user = {
             "username": request.json['username'],
-            "password": hashed_password,
+            "password": request.json['password'],
             "email": request.json['email'],
             "verified": False
         }
 
-        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
-            db = client.users
-            db.user.insert_one(new_user);
-            return jsonify({'message':'user added'})
 
+        validate(instance=new_user, schema=signup_schema,)
+
+        new_user['password'] = hashed_password
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+             db = client.users
+             db.user.insert_one(new_user);
+             return jsonify({'message':'user added'})
+
+    except ValidationError as error:
+         logging.info(error)
+         
+         return  jsonify({'message':'error de validación'})
     except Exception as error:
         logging.info(error)
-        return 'error'
+        return  jsonify({'message':'error'})
     
 @app.route('/signin', methods=["POST"])
 def signin():

@@ -1,4 +1,6 @@
 flask
+flask-inputs
 pymongo
 pyjwt
 requests
+jsonschema
