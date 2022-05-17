@@ -26,7 +26,7 @@ app.logger.info(f"SECRET KEY: {SECRET_KEY} EXPIRATION: {EXP_TOKEN}")
 app.logger.info(f"DB CONNECTED: {DB_ENDPOINT}")
 
 
-signup_schema = {
+schema = {
     "type":"object",
     "properties": {
         "username": {"type": "string"},
@@ -40,6 +40,7 @@ signup_schema = {
         },
     }
 }
+
         
 
 @app.route('/signup', methods=["POST"])
@@ -57,7 +58,7 @@ def signup():
         }
 
 
-        validate(instance=new_user, schema=signup_schema,)
+        validate(instance=new_user, schema=schema,)
 
         new_user['password'] = hashed_password
         with MongoClient(DB_ENDPOINT, DB_PORT) as client:
@@ -75,29 +76,40 @@ def signup():
     
 @app.route('/signin', methods=["POST"])
 def signin():
-    stb.notify(NAME_SERVICE)
-    app.logger.info(request.json)
-    m = hashlib.new('sha256')
-    m.update(request.json['password'].encode('utf-8'))
-    hashed_password = m.hexdigest()
-    user = {
-        "username": request.json['username'],
-        "password": request.json['password'],
-    }
-    
-    with MongoClient(DB_ENDPOINT, DB_PORT) as client:
-        db = client.users
-        query = {"username":user['username'], "password": hashed_password}
-        
-        if db.user.find_one(query):
-            token = jwt.encode({
-                'public_id': user['username'],
-                'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
-                }, SECRET_KEY)
-            return make_response(jsonify({'token' : token}), 201)
-        else:
-            return jsonify({"message":"usuario o contraseña incorrectos"})
+    try:
+        stb.notify(NAME_SERVICE)
+        app.logger.info(request.json)
+        m = hashlib.new('sha256')
+        m.update(request.json['password'].encode('utf-8'))
+        hashed_password = m.hexdigest()
+        user = {
+            "username": request.json['username'],
+            "password": request.json['password'],
+        }
+        validate(instance=user, schema=schema,)
 
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+            db = client.users
+            query = {"username":user['username'], "password": hashed_password}
+        
+            if db.user.find_one(query):
+                token = jwt.encode({
+                    'public_id': user['username'],
+                    'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
+                }, SECRET_KEY)
+                return make_response(jsonify({'token' : token}), 201)
+            else:
+                return jsonify({"message":"usuario o contraseña incorrectos"})
+
+    except ValidationError as error:
+        logging.info(error)
+        return  jsonify({'message':'error de validación'})
+
+    except Exception as error:
+        logging.info(error)
+        return  jsonify({'message':'Error: '+error})
+
+    
 @app.route('/auth', methods=["GET"])
 def verify_token():
     stb.notify(NAME_SERVICE)
@@ -127,25 +139,35 @@ def verify_token():
 
 @app.route('/recover_password', methods=["GET"])
 def recover_password():
-     user = {
-        "email": request.json['email'],
-     }
-    
-     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
-         db = client.users
-         query = {"email":user['email']}
-         query_result = db.user.find_one(query)
+    try:
+        user = {
+            "email": request.json['email'],
+        }
+        validate(instance=user, schema=schema,)
+     
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+            db = client.users
+            query = {"email":user['email']}
+            query_result = db.user.find_one(query)
         
-         if query_result :
-             token = jwt.encode({
-                 'email': user['email'],
-                 'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
-                 'old_password': query_result['password']
-             }, SECRET_KEY)
-             return make_response(jsonify({'token' : token}), 201)
-         else:
-             return jsonify({"message":"email no encontrado"})
+            if query_result :
+                token = jwt.encode({
+                    'email': user['email'],
+                    'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
+                    'old_password': query_result['password']
+                }, SECRET_KEY)
+                return make_response(jsonify({'token' : token}), 201)
+            else:
+                return jsonify({"message":"email no encontrado"})
+            
+    except ValidationError as error:
+        logging.info(error)
+        return  jsonify({'message':'error de validación'})
 
+    except Exception as error:
+        logging.info(error)
+        return  jsonify({'message':'Error: '+error})
+    
 @app.route('/change_password', methods=["POST"])
 def change_password():
 
@@ -154,7 +176,9 @@ def change_password():
     user = {
          "password": request.json['password'],
     }
-     
+
+    validate(instance=user, schema=schema,)
+
     decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
 
     m = hashlib.new('sha256')
