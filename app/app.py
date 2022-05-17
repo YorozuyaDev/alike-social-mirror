@@ -129,30 +129,30 @@ def change_password():
          "password": request.json['password'],
     }
      
-     decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+    decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
 
-     m = hashlib.new('sha256')
-     m.update(request.json['password'].encode('utf-8'))
-     hashed_password = m.hexdigest()
-     if hashed_password == decoded_token['old_password']:
-         return jsonify({"message":"cannot use the same password"})
+    m = hashlib.new('sha256')
+    m.update(request.json['password'].encode('utf-8'))
+    hashed_password = m.hexdigest()
+    if hashed_password == decoded_token['old_password']:
+        return jsonify({"message":"cannot use the same password"})
      
-     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
-         db = client.users
-         query = {"email":decoded_token['email']}
-         query_result = db.user.find_one(query)
+    with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+        db = client.users
+        query = {"email":decoded_token['email']}
+        query_result = db.user.find_one(query)
 
-         if not query_result:
-             return make_response(jsonify({'message' : 'not found'}), 404)
+        if not query_result:
+            return make_response(jsonify({'message' : 'not found'}), 404)
 
-         elif query_result['password'] == decoded_token['old_password']:
-             update_query = {"$set": {"email":decoded_token['email']
-                                      , "password": hashed_password}}
-             db.user.update_one(query, update_query)
-             return jsonify({"message":"usuario actualizado"})
+        elif query_result['password'] == decoded_token['old_password']:
+            update_query = {"$set": {"email":decoded_token['email']
+                                     , "password": hashed_password}}
+            db.user.update_one(query, update_query)
+            return jsonify({"message":"usuario actualizado"})
 
-         else:
-             return make_response(jsonify({'message' : 'token invalid'}), 403)
+        else:
+            return make_response(jsonify({'message' : 'token invalid'}), 403)
 
          
             
