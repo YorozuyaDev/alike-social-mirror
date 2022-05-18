@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request, make_response
 from jsonschema import validate, ValidationError
-from pymongo import MongoClient
+from pymongo import MongoClient, DESCENDING
 import jwt
 from datetime import datetime, timedelta
 import hashlib
@@ -68,12 +68,12 @@ def signup():
 
     except ValidationError as error:
          logging.info(error)
-         
          return  jsonify({'message':'error de validación'})
+
     except Exception as error:
         logging.info(error)
-        return  jsonify({'message':'error'})
-    
+        return  jsonify({'message':'Error: '+ str(error)})
+         
 @app.route('/signin', methods=["POST"])
 def signin():
     try:
@@ -207,7 +207,11 @@ def change_password():
          
             
 def init_database():
-    pass
-
-if __name__ =='__main__':  
+    with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+        db = client.users
+        db.user.create_index([("email", DESCENDING)], unique=True) 
+        db.user.create_index([("username", DESCENDING)], unique=True) 
+        
+if __name__ =='__main__':
+    init_database()
     app.run(host='0.0.0.0', debug = True)  
