@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request, make_response
-from pymongo import MongoClient
+from jsonschema import validate, ValidationError
+from pymongo import MongoClient, DESCENDING
 import jwt
 from datetime import datetime, timedelta
 import hashlib
@@ -24,6 +25,24 @@ DB_PORT = int(os.environ['DB_PORT'])
 app.logger.info(f"SECRET KEY: {SECRET_KEY} EXPIRATION: {EXP_TOKEN}")
 app.logger.info(f"DB CONNECTED: {DB_ENDPOINT}")
 
+
+schema = {
+    "type":"object",
+    "properties": {
+        "username": {"type": "string"},
+        "password": {
+            "type":"string",
+            "pattern":'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,15}$'
+            },
+        "email": {
+            "type": "string",
+            "pattern": '^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$'
+        },
+    }
+}
+
+        
+
 @app.route('/signup', methods=["POST"])
 def signup():
     stb.notify(NAME_SERVICE)
@@ -33,45 +52,64 @@ def signup():
         hashed_password = m.hexdigest()
         new_user = {
             "username": request.json['username'],
-            "password": hashed_password,
+            "password": request.json['password'],
             "email": request.json['email'],
             "verified": False
         }
 
+
+        validate(instance=new_user, schema=schema,)
+
+        new_user['password'] = hashed_password
         with MongoClient(DB_ENDPOINT, DB_PORT) as client:
-            db = client.users
-            db.user.insert_one(new_user);
-            return jsonify({'message':'user added'})
+             db = client.users
+             db.user.insert_one(new_user);
+             return jsonify({'message':'user added'})
+
+    except ValidationError as error:
+         logging.info(error)
+         return  jsonify({'message':'error de validación'})
 
     except Exception as error:
         logging.info(error)
-        return 'error'
-    
+        return  jsonify({'message':'Error: '+ str(error)})
+         
 @app.route('/signin', methods=["POST"])
 def signin():
-    stb.notify(NAME_SERVICE)
-    app.logger.info(request.json)
-    m = hashlib.new('sha256')
-    m.update(request.json['password'].encode('utf-8'))
-    hashed_password = m.hexdigest()
-    user = {
-        "username": request.json['username'],
-        "password": request.json['password'],
-    }
-    
-    with MongoClient(DB_ENDPOINT, DB_PORT) as client:
-        db = client.users
-        query = {"username":user['username'], "password": hashed_password}
-        
-        if db.user.find_one(query):
-            token = jwt.encode({
-                'public_id': user['username'],
-                'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
-                }, SECRET_KEY)
-            return make_response(jsonify({'token' : token}), 201)
-        else:
-            return jsonify({"message":"usuario o contraseña incorrectos"})
+    try:
+        stb.notify(NAME_SERVICE)
+        app.logger.info(request.json)
+        m = hashlib.new('sha256')
+        m.update(request.json['password'].encode('utf-8'))
+        hashed_password = m.hexdigest()
+        user = {
+            "username": request.json['username'],
+            "password": request.json['password'],
+        }
+        validate(instance=user, schema=schema,)
 
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+            db = client.users
+            query = {"username":user['username'], "password": hashed_password}
+        
+            if db.user.find_one(query):
+                token = jwt.encode({
+                    'public_id': user['username'],
+                    'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
+                }, SECRET_KEY)
+                return make_response(jsonify({'token' : token}), 201)
+            else:
+                return jsonify({"message":"usuario o contraseña incorrectos"})
+
+    except ValidationError as error:
+        logging.info(error)
+        return  jsonify({'message':'error de validación'})
+
+    except Exception as error:
+        logging.info(error)
+        return  jsonify({'message':'Error: '+error})
+
+    
 @app.route('/auth', methods=["GET"])
 def verify_token():
     stb.notify(NAME_SERVICE)
@@ -101,25 +139,35 @@ def verify_token():
 
 @app.route('/recover_password', methods=["GET"])
 def recover_password():
-     user = {
-        "email": request.json['email'],
-     }
-    
-     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
-         db = client.users
-         query = {"email":user['email']}
-         query_result = db.user.find_one(query)
+    try:
+        user = {
+            "email": request.json['email'],
+        }
+        validate(instance=user, schema=schema,)
+     
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+            db = client.users
+            query = {"email":user['email']}
+            query_result = db.user.find_one(query)
         
-         if query_result :
-             token = jwt.encode({
-                 'email': user['email'],
-                 'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
-                 'old_password': query_result['password']
-             }, SECRET_KEY)
-             return make_response(jsonify({'token' : token}), 201)
-         else:
-             return jsonify({"message":"email no encontrado"})
+            if query_result :
+                token = jwt.encode({
+                    'email': user['email'],
+                    'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
+                    'old_password': query_result['password']
+                }, SECRET_KEY)
+                return make_response(jsonify({'token' : token}), 201)
+            else:
+                return jsonify({"message":"email no encontrado"})
+            
+    except ValidationError as error:
+        logging.info(error)
+        return  jsonify({'message':'error de validación'})
 
+    except Exception as error:
+        logging.info(error)
+        return  jsonify({'message':'Error: '+error})
+    
 @app.route('/change_password', methods=["POST"])
 def change_password():
 
@@ -128,36 +176,42 @@ def change_password():
     user = {
          "password": request.json['password'],
     }
+
+    validate(instance=user, schema=schema,)
+
+    decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+
+    m = hashlib.new('sha256')
+    m.update(request.json['password'].encode('utf-8'))
+    hashed_password = m.hexdigest()
+    if hashed_password == decoded_token['old_password']:
+        return jsonify({"message":"cannot use the same password"})
      
-     decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+    with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+        db = client.users
+        query = {"email":decoded_token['email']}
+        query_result = db.user.find_one(query)
 
-     m = hashlib.new('sha256')
-     m.update(request.json['password'].encode('utf-8'))
-     hashed_password = m.hexdigest()
-     if hashed_password == decoded_token['old_password']:
-         return jsonify({"message":"cannot use the same password"})
-     
-     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
-         db = client.users
-         query = {"email":decoded_token['email']}
-         query_result = db.user.find_one(query)
+        if not query_result:
+            return make_response(jsonify({'message' : 'not found'}), 404)
 
-         if not query_result:
-             return make_response(jsonify({'message' : 'not found'}), 404)
+        elif query_result['password'] == decoded_token['old_password']:
+            update_query = {"$set": {"email":decoded_token['email']
+                                     , "password": hashed_password}}
+            db.user.update_one(query, update_query)
+            return jsonify({"message":"usuario actualizado"})
 
-         elif query_result['password'] == decoded_token['old_password']:
-             update_query = {"$set": {"email":decoded_token['email']
-                                      , "password": hashed_password}}
-             db.user.update_one(query, update_query)
-             return jsonify({"message":"usuario actualizado"})
-
-         else:
-             return make_response(jsonify({'message' : 'token invalid'}), 403)
+        else:
+            return make_response(jsonify({'message' : 'token invalid'}), 403)
 
          
             
 def init_database():
-    pass
-
-if __name__ =='__main__':  
+    with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+        db = client.users
+        db.user.create_index([("email", DESCENDING)], unique=True) 
+        db.user.create_index([("username", DESCENDING)], unique=True) 
+        
+if __name__ =='__main__':
+    init_database()
     app.run(host='0.0.0.0', debug = True)  
