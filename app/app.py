@@ -38,11 +38,18 @@ schema = {
             "type": "string",
             "pattern": '^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$'
         },
+        "bio": {"type": "string"}
     }
 }
 
-        
+def is_valid(exp):
+        app.logger.info(datetime.utcnow().strftime('%s'))
+        if (exp == 'undefined' or exp == 'null' or int(exp) > int(datetime.utcnow().strftime('%s'))):
+            return True
+        else:
+            return False
 
+        
 @app.route('/signup', methods=["POST"])
 def signup():
     stb.notify(NAME_SERVICE)
@@ -54,9 +61,9 @@ def signup():
             "username": request.json['username'],
             "password": request.json['password'],
             "email": request.json['email'],
+            "bio": request.json['bio'],
             "verified": False
         }
-
 
         validate(instance=new_user, schema=schema,)
 
@@ -112,16 +119,7 @@ def signin():
     
 @app.route('/auth', methods=["GET"])
 def verify_token():
-    stb.notify(NAME_SERVICE)
-
-    def is_valid(exp):
-        app.logger.info(datetime.utcnow().strftime('%s'))
-        if (exp == 'undefined' or exp == 'null' or int(exp) > int(datetime.utcnow().strftime('%s'))):
-            return True
-        else:
-            return False
-        
-  
+    stb.notify(NAME_SERVICE)  
     token = request.headers.get('Authorization')
     
     app.logger.info(token)
@@ -139,6 +137,7 @@ def verify_token():
 
 @app.route('/recover_password', methods=["GET"])
 def recover_password():
+    stb.notify(NAME_SERVICE)  
     try:
         user = {
             "email": request.json['email'],
@@ -170,7 +169,7 @@ def recover_password():
     
 @app.route('/change_password', methods=["POST"])
 def change_password():
-
+    stb.notify(NAME_SERVICE)  
     token = request.headers.get('Authorization')
 
     user = {
@@ -184,6 +183,7 @@ def change_password():
     m = hashlib.new('sha256')
     m.update(request.json['password'].encode('utf-8'))
     hashed_password = m.hexdigest()
+
     if hashed_password == decoded_token['old_password']:
         return jsonify({"message":"cannot use the same password"})
      
@@ -204,8 +204,61 @@ def change_password():
         else:
             return make_response(jsonify({'message' : 'token invalid'}), 403)
 
-         
+@app.route('/edit_profile', methods=["PUT"])     
+def edit_profile():
+    stb.notify(NAME_SERVICE)  
+    token = request.headers.get('Authorization')
+
+    try:
+        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        app.logger.info(decoded_token)
+        username = decoded_token['public_id']
+        if not is_valid(decoded_token['exp']):
+            return make_response(jsonify({'message' : 'unauthorized'}), 401)
+
+    except Exception as error:
+        app.logger.error(error)
+        return make_response(jsonify({'message' : 'unauthorized'}), 401)
+
+    
+    profile = {
+        "username":username
+    }
+    edited_profile = {}
+    try:
+
+        if 'username' in request.json:
+            edited_profile['username'] = request.json['username']
+            token = jwt.encode({
+                'public_id': edited_profile['username'],
+                'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
+            }, SECRET_KEY)
             
+        if 'bio' in request.json:
+            edited_profile['bio'] = request.json['bio']
+
+        if 'email' in request.json:
+            edited_profile['email'] = request.json['email']
+            edited_profile['verified'] = False
+
+        validate(instance=edited_profile, schema=schema,)
+
+        update_profile = {"$set": edited_profile}
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+            db = client.users
+            db.user.update_one(profile, update_profile)
+            return make_response(jsonify({'message':'updated user','token' : token}), 201)
+
+               
+    except ValidationError as error:
+        logging.info(error)
+        return  jsonify({'message':'error de validación'})
+
+    except Exception as error:
+        logging.info(error)
+        return  jsonify({'message':'Error: '+error})
+
+        
 def init_database():
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
