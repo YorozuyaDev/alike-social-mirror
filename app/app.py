@@ -136,41 +136,60 @@ def verify_token():
         return make_response(jsonify({'message' : 'unauthorized'}), 401)
 
 
-@app.route('/recover_password', methods=["GET"])
-def recover_password():
+@app.route('/password_token', methods=["GET"])
+def password_token():
     stb.notify(NAME_SERVICE)  
     try:
-        user = {
-            "email": request.json['email'],
-        }
-        validate(instance=user, schema=schema,)
+        #First type of token, recover by email
+        if 'email' in request.json:
+            user = {
+                "email": request.json['email'],
+            }
+            validate(instance=user, schema=schema,)
      
-        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
-            db = client.users
-            query = {"email":user['email']}
-            query_result = db.user.find_one(query)
-        
-            if query_result :
-                token = jwt.encode({
-                    'email': user['email'],
-                    'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
-                    'old_password': query_result['password']
-                }, SECRET_KEY)
-                return make_response(jsonify({'token' : token}), 201)
-            else:
-                return jsonify({"message":"email no encontrado"})
+            with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"email":user['email']}
+                query_result = db.user.find_one(query)
+
+        #Second type, recover with last password
+        elif 'password' in request.json:
+            token = request.headers.get('Authorization')
+            decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
             
+            with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"username":decoded_token['public_id']}
+                query_result = db.user.find_one(query)
+                
+            m = hashlib.new('sha256')
+            m.update(request.json['password'].encode('utf-8'))
+            hashed_password = m.hexdigest()
+            
+            if query_result['password'] != hashed_password :
+                return make_response(jsonify({'message' : 'unauthorized'}), 401)
+        else:
+            return make_response(jsonify({'message' : 'forbidden'}), 403)
+
+        token = jwt.encode({
+            'email': query_result['email'],
+            'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
+            'old_password': query_result['password']
+        }, SECRET_KEY)
+        return make_response(jsonify({'token' : token}), 201)
+                      
     except ValidationError as error:
         logging.info(error)
         return  jsonify({'message':'error de validación'})
 
     except Exception as error:
         logging.info(error)
-        return  jsonify({'message':'Error: '+error})
+        return  jsonify({'message':'Error: '+str(error)})
     
 @app.route('/change_password', methods=["POST"])
 def change_password():
     stb.notify(NAME_SERVICE)  
+
     token = request.headers.get('Authorization')
 
     user = {
@@ -180,13 +199,6 @@ def change_password():
     validate(instance=user, schema=schema,)
 
     decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
-
-    m = hashlib.new('sha256')
-    m.update(request.json['password'].encode('utf-8'))
-    hashed_password = m.hexdigest()
-
-    if hashed_password == decoded_token['old_password']:
-        return jsonify({"message":"cannot use the same password"})
      
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
@@ -196,7 +208,14 @@ def change_password():
         if not query_result:
             return make_response(jsonify({'message' : 'not found'}), 404)
 
-        elif query_result['password'] == decoded_token['old_password']:
+        elif query_result['password'] == decoded_token['old_password']:        
+            m = hashlib.new('sha256')
+            m.update(request.json['password'].encode('utf-8'))
+            hashed_password = m.hexdigest()
+
+            if hashed_password == query_result['password']:
+                return jsonify({"message":"cannot use the same password"})
+
             update_query = {"$set": {"email":decoded_token['email']
                                      , "password": hashed_password}}
             db.user.update_one(query, update_query)
@@ -205,7 +224,7 @@ def change_password():
         else:
             return make_response(jsonify({'message' : 'token invalid'}), 403)
 
-@app.route('/edit_profile', methods=["PUT"])     
+@app.route('/user', methods=["PUT"])     
 def edit_profile():
     stb.notify(NAME_SERVICE)  
     token = request.headers.get('Authorization')
@@ -257,9 +276,9 @@ def edit_profile():
 
     except Exception as error:
         logging.info(error)
-        return  jsonify({'message':'Error: '+error})
+        return  jsonify({'message':'Error: '+str(error)})
 
-@app.route('/delete_profile', methods=["DELETE"])     
+@app.route('/user', methods=["DELETE"])     
 def delete_profile():
     stb.notify(NAME_SERVICE)  
     token = request.headers.get('Authorization')
@@ -282,7 +301,8 @@ def delete_profile():
     except Exception as error:
         app.logger.error(error)
         return make_response(jsonify({'message' : 'error deleting user'}), 500)
-    
+
+
 def init_database():
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
