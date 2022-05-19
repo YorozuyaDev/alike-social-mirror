@@ -62,7 +62,8 @@ def signup():
             "password": request.json['password'],
             "email": request.json['email'],
             "bio": request.json['bio'],
-            "verified": False
+            "verified": False,
+            "disabled": False,
         }
 
         validate(instance=new_user, schema=schema,)
@@ -258,7 +259,30 @@ def edit_profile():
         logging.info(error)
         return  jsonify({'message':'Error: '+error})
 
+@app.route('/delete_profile', methods=["DELETE"])     
+def delete_profile():
+    stb.notify(NAME_SERVICE)  
+    token = request.headers.get('Authorization')
+     
+    try:
+        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        app.logger.info(decoded_token)
+        username = decoded_token['public_id']
         
+        if  is_valid(decoded_token['exp']):
+            with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                query = {"username":username}
+                update_query = {"$set": {"disabled":datetime.now().strftime("%Y-%m-%d")}}
+                db = client.users
+                db.user.update_one(query, update_query)
+                return make_response(jsonify({'message' : 'user deleted'}), 200)
+        else:
+            return make_response(jsonify({'message' : 'unauthorized'}), 401)
+        
+    except Exception as error:
+        app.logger.error(error)
+        return make_response(jsonify({'message' : 'error deleting user'}), 500)
+    
 def init_database():
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
