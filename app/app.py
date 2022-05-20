@@ -224,6 +224,23 @@ def change_password():
         else:
             return make_response(jsonify({'message' : 'token invalid'}), 403)
 
+
+@app.route('/<username>', methods=["GET"])     
+def show_profile(username):
+        
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"username":username}
+                query_result = db.user.find_one(query)
+
+                if query_result:
+                        user = {
+                                "username": query_result['username'],
+                                "bio": query_result['bio']
+                                }
+                        return make_response(jsonify(user), 200)
+
+                        
 @app.route('/user', methods=["PUT"])     
 def edit_profile():
     stb.notify(NAME_SERVICE)  
