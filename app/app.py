@@ -332,6 +332,7 @@ def search_profile(username):
                 if query_result:
                         return make_response(dumps(query_result), 200)
 
+                return make_response(jsonify({"message":"user not found"}), 404)
 
                 
 def init_database():
