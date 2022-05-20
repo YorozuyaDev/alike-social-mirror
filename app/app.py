@@ -238,7 +238,8 @@ def show_profile(username):
                 if query_result:
                         user = {
                                 "username": query_result['username'],
-                                "bio": query_result['bio']
+                                "bio": query_result['bio'],
+                                "following": query_result['following']
                                 }
                         return make_response(jsonify(user), 200)
 
