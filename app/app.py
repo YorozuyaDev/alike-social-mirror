@@ -364,7 +364,24 @@ def follow(username):
                 db.user.update_one(query, update_query)
                 return make_response(jsonify({"message":"followed"}), 200)
 
-                
+@app.route('/follow/<username>', methods=["DELETE"])     
+def unfollow(username):
+        token = request.headers.get('Authorization')
+        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        user = decoded_token['public_id']  
+        
+        if user == username:
+                return make_response({"message":"cannot unfollow yourself"}, 400)
+
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"username":user}
+                update_query = {"$pull": {"following":username}}
+                db.user.update_one(query, update_query)
+                return make_response(jsonify({"message":"unfollowed"}), 200)
+
+        return make_response(jsonify({"message":"could not unfollow"}), 200)
+
 def init_database():
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
