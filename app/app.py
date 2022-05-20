@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, make_response
 from jsonschema import validate, ValidationError
 from pymongo import MongoClient, DESCENDING
+from bson.json_util import dumps
 import jwt
 from datetime import datetime, timedelta
 import hashlib
@@ -320,6 +321,19 @@ def delete_profile():
         return make_response(jsonify({'message' : 'error deleting user'}), 500)
 
 
+@app.route('/search/<username>', methods=["GET"])     
+def search_profile(username):
+
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"username":{'$regex':'^'+username, "$options": "-xi"}}
+                projection = {"_id": 0, "username": 1, "bio": 1, "disabled":1}
+                query_result = db.user.find(query, projection)
+                if query_result:
+                        return make_response(dumps(query_result), 200)
+
+
+                
 def init_database():
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
