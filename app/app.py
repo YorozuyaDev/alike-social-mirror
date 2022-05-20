@@ -63,6 +63,7 @@ def signup():
             "password": request.json['password'],
             "email": request.json['email'],
             "bio": request.json['bio'],
+            "following": [],    
             "verified": False,
             "disabled": False,
         }
@@ -333,6 +334,23 @@ def search_profile(username):
                         return make_response(dumps(query_result), 200)
 
                 return make_response(jsonify({"message":"user not found"}), 404)
+
+@app.route('/follow/<username>', methods=["POST"])     
+def follow(username):
+
+        token = request.headers.get('Authorization')
+        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        user = decoded_token['public_id']
+
+        if user == username:
+                return make_response({"message":"cannot follow yourself"}, 400)
+
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                query = {"username":user}
+                update_query = {"$push": {"following":username}}
+                db = client.users
+                db.user.update_one(query, update_query)
+                return make_response(jsonify({"message":"followed"}), 200)
 
                 
 def init_database():
