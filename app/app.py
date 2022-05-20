@@ -340,13 +340,24 @@ def follow(username):
 
         token = request.headers.get('Authorization')
         decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
-        user = decoded_token['public_id']
-
+        user = decoded_token['public_id']  
+        
         if user == username:
                 return make_response({"message":"cannot follow yourself"}, 400)
 
         with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
                 query = {"username":user}
+                query_result = db.user.find_one(query)
+                
+                if not db.user.find_one({"username":username}):
+                        return make_response(jsonify({"message":"user does not exist"}), 404)
+
+                following =  query_result['following']
+                
+                if username in following:
+                        return make_response(jsonify({"message":"already followed"}), 200)
+   
                 update_query = {"$push": {"following":username}}
                 db = client.users
                 db.user.update_one(query, update_query)
