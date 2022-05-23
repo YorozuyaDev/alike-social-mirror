@@ -226,8 +226,6 @@ def change_password():
         else:
             return make_response(jsonify({'message' : 'token invalid'}), 403)
 
-<<<<<<< HEAD
-=======
 
 @app.route('/<username>', methods=["GET"])     
 def show_profile(username):
