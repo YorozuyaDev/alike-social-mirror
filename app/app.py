@@ -244,7 +244,6 @@ def show_profile(username):
                         return make_response(jsonify(user), 200)
 
                         
->>>>>>> dev-javi
 @app.route('/user', methods=["PUT"])     
 def edit_profile():
     stb.notify(NAME_SERVICE)  
@@ -324,8 +323,6 @@ def delete_profile():
         return make_response(jsonify({'message' : 'error deleting user'}), 500)
 
 
-<<<<<<< HEAD
-=======
 @app.route('/search/<username>', methods=["GET"])     
 def search_profile(username):
 
@@ -385,7 +382,6 @@ def unfollow(username):
 
         return make_response(jsonify({"message":"could not unfollow"}), 200)
 
->>>>>>> dev-javi
 def init_database():
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
