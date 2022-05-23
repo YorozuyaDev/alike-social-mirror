@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, make_response
 from jsonschema import validate, ValidationError
 from pymongo import MongoClient, DESCENDING
+from bson.json_util import dumps
 import jwt
 from datetime import datetime, timedelta
 import hashlib
@@ -62,6 +63,10 @@ def signup():
             "password": request.json['password'],
             "email": request.json['email'],
             "bio": request.json['bio'],
+<<<<<<< HEAD
+=======
+            "following": [],    
+>>>>>>> dev-javi
             "verified": False,
             "disabled": False,
         }
@@ -224,6 +229,27 @@ def change_password():
         else:
             return make_response(jsonify({'message' : 'token invalid'}), 403)
 
+<<<<<<< HEAD
+=======
+
+@app.route('/<username>', methods=["GET"])     
+def show_profile(username):
+        
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"username":username}
+                query_result = db.user.find_one(query)
+
+                if query_result:
+                        user = {
+                                "username": query_result['username'],
+                                "bio": query_result['bio'],
+                                "following": query_result['following']
+                                }
+                        return make_response(jsonify(user), 200)
+
+                        
+>>>>>>> dev-javi
 @app.route('/user', methods=["PUT"])     
 def edit_profile():
     stb.notify(NAME_SERVICE)  
@@ -303,6 +329,68 @@ def delete_profile():
         return make_response(jsonify({'message' : 'error deleting user'}), 500)
 
 
+<<<<<<< HEAD
+=======
+@app.route('/search/<username>', methods=["GET"])     
+def search_profile(username):
+
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"username":{'$regex':'^'+username, "$options": "-xi"}}
+                projection = {"_id": 0, "username": 1, "bio": 1, "disabled":1}
+                query_result = db.user.find(query, projection)
+                if query_result:
+                        return make_response(dumps(query_result), 200)
+
+                return make_response(jsonify({"message":"user not found"}), 404)
+
+@app.route('/follow/<username>', methods=["POST"])     
+def follow(username):
+
+        token = request.headers.get('Authorization')
+        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        user = decoded_token['public_id']  
+        
+        if user == username:
+                return make_response({"message":"cannot follow yourself"}, 400)
+
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"username":user}
+                query_result = db.user.find_one(query)
+                
+                if not db.user.find_one({"username":username}):
+                        return make_response(jsonify({"message":"user does not exist"}), 404)
+
+                following =  query_result['following']
+                
+                if username in following:
+                        return make_response(jsonify({"message":"already followed"}), 200)
+   
+                update_query = {"$push": {"following":username}}
+                db = client.users
+                db.user.update_one(query, update_query)
+                return make_response(jsonify({"message":"followed"}), 200)
+
+@app.route('/follow/<username>', methods=["DELETE"])     
+def unfollow(username):
+        token = request.headers.get('Authorization')
+        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        user = decoded_token['public_id']  
+        
+        if user == username:
+                return make_response({"message":"cannot unfollow yourself"}, 400)
+
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"username":user}
+                update_query = {"$pull": {"following":username}}
+                db.user.update_one(query, update_query)
+                return make_response(jsonify({"message":"unfollowed"}), 200)
+
+        return make_response(jsonify({"message":"could not unfollow"}), 200)
+
+>>>>>>> dev-javi
 def init_database():
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
