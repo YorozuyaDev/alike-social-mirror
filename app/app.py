@@ -63,12 +63,9 @@ def signup():
             "password": request.json['password'],
             "email": request.json['email'],
             "bio": request.json['bio'],
-<<<<<<< HEAD
-=======
             "following": [],    
->>>>>>> dev-javi
             "verified": False,
-            "disabled": False,
+            "disabled": False
         }
 
         validate(instance=new_user, schema=schema,)
