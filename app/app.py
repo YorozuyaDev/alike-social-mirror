@@ -144,15 +144,22 @@ def signin():
 def verify_token():
     stb.notify(NAME_SERVICE)  
     token = request.headers.get('Authorization')
-    
     app.logger.info(token)
+    
     try:
         decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
         app.logger.info(decoded_token)
+
         if is_valid(decoded_token['exp']):
-            return make_response(jsonify({'public_id' : decoded_token['public_id']}), 200)
+                fresh_token = jwt.encode({
+                        'public_id': decoded_token['public_id'],
+                        'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
+                }, SECRET_KEY)
+                return make_response(jsonify({'public_id' : decoded_token['public_id'],
+                                              'token':fresh_token}), 200)
         else:
              return make_response(jsonify({'message' : 'unauthorized'}), 401)
+
     except Exception as error:
         app.logger.error(error)
         return make_response(jsonify({'message' : 'unauthorized'}), 401)
