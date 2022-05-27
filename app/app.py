@@ -16,14 +16,16 @@ from alike_mail import *
 logging.basicConfig(level=logging.DEBUG)
 app = Flask(__name__)
 
-SECRET_KEY = os.environ['SECRET_KEY']
+with open('/run/secrets/jwt_token') as secret_file:
+        JWT_SECRET = secret_file.read()
+
 EXP_TOKEN = int(os.environ['EXP_TOKEN'])
 NAME_SERVICE = os.environ['NAME_SERVICE']
 DB_ENDPOINT = 'alike-mongodb'
 DB_PORT = int(os.environ['DB_PORT'])
 
 
-app.logger.info(f"SECRET KEY: {SECRET_KEY} EXPIRATION: {EXP_TOKEN}")
+app.logger.info(f"EXPIRATION: {EXP_TOKEN}")
 app.logger.info(f"DB CONNECTED: {DB_ENDPOINT}")
 
 
@@ -54,7 +56,7 @@ def generate_url(user):
         token = jwt.encode({
                 'email': user['email'],
                 'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
-        }, SECRET_KEY)
+        }, JWT_SECRET)
         return "http://localhost:2000/validate?token=" + token
 
 @app.route('/signup', methods=["POST"])
@@ -96,7 +98,7 @@ def signup():
 @app.route('/validate', methods=["GET"])
 def activate_user():
         token = request.args.get("token", default="", type=str)
-        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
         query = {"email":decoded_token['email']}
         update_query = {"$set": {"email":decoded_token['email'], "verified":True}}
         with MongoClient(DB_ENDPOINT, DB_PORT) as client:
@@ -126,7 +128,7 @@ def signin():
                 token = jwt.encode({
                     'public_id': user['username'],
                     'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
-                }, SECRET_KEY)
+                }, JWT_SECRET)
                 return make_response(jsonify({'token' : token}), 201)
             else:
                 return jsonify({"message":"usuario o contraseña incorrectos"})
@@ -147,14 +149,14 @@ def verify_token():
     app.logger.info(token)
     
     try:
-        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
         app.logger.info(decoded_token)
 
         if is_valid(decoded_token['exp']):
                 fresh_token = jwt.encode({
                         'public_id': decoded_token['public_id'],
                         'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
-                }, SECRET_KEY)
+                }, JWT_SECRET)
                 return make_response(jsonify({'public_id' : decoded_token['public_id'],
                                               'token':fresh_token}), 200)
         else:
@@ -184,7 +186,7 @@ def password_token():
         #Second type, recover with last password
         elif 'password' in request.json:
             token = request.headers.get('Authorization')
-            decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+            decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
             
             with MongoClient(DB_ENDPOINT, DB_PORT) as client:
                 db = client.users
@@ -204,7 +206,7 @@ def password_token():
             'email': query_result['email'],
             'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
             'old_password': query_result['password']
-        }, SECRET_KEY)
+        }, JWT_SECRET)
         return make_response(jsonify({'token' : token}), 201)
                       
     except ValidationError as error:
@@ -227,7 +229,7 @@ def change_password():
 
     validate(instance=user, schema=schema,)
 
-    decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+    decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
      
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
@@ -277,7 +279,7 @@ def edit_profile():
     token = request.headers.get('Authorization')
 
     try:
-        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
         app.logger.info(decoded_token)
         username = decoded_token['public_id']
         if not is_valid(decoded_token['exp']):
@@ -299,7 +301,7 @@ def edit_profile():
             token = jwt.encode({
                 'public_id': edited_profile['username'],
                 'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
-            }, SECRET_KEY)
+            }, JWT_SECRET)
             
         if 'bio' in request.json:
             edited_profile['bio'] = request.json['bio']
@@ -331,7 +333,7 @@ def delete_profile():
     token = request.headers.get('Authorization')
      
     try:
-        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
         app.logger.info(decoded_token)
         username = decoded_token['public_id']
         
@@ -367,7 +369,7 @@ def search_profile(username):
 def follow(username):
 
         token = request.headers.get('Authorization')
-        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
         user = decoded_token['public_id']  
         
         if user == username:
@@ -394,7 +396,7 @@ def follow(username):
 @app.route('/follow/<username>', methods=["DELETE"])     
 def unfollow(username):
         token = request.headers.get('Authorization')
-        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
         user = decoded_token['public_id']  
         
         if user == username:
