@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response, redirect
 from jsonschema import validate, ValidationError
 from pymongo import MongoClient, DESCENDING
 from bson.json_util import dumps
@@ -11,7 +11,7 @@ import os
 import json
 import requests
 import statusboard as stb
-
+from alike_mail import *
 
 logging.basicConfig(level=logging.DEBUG)
 app = Flask(__name__)
@@ -50,7 +50,13 @@ def is_valid(exp):
         else:
             return False
 
-        
+def generate_url(user):
+        token = jwt.encode({
+                'email': user['email'],
+                'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
+        }, SECRET_KEY)
+        return "http://localhost:2000/validate?token=" + token
+
 @app.route('/signup', methods=["POST"])
 def signup():
     stb.notify(NAME_SERVICE)
@@ -68,14 +74,17 @@ def signup():
             "disabled": False
         }
 
+
         validate(instance=new_user, schema=schema,)
 
         new_user['password'] = hashed_password
         with MongoClient(DB_ENDPOINT, DB_PORT) as client:
              db = client.users
              db.user.insert_one(new_user);
+             activation_url = generate_url({'email':new_user['email']})
+             request_confirmation(new_user['email'], new_user['username'], activation_url)
              return jsonify({'message':'user added'})
-
+     
     except ValidationError as error:
          logging.info(error)
          return  jsonify({'message':'error de validación'})
@@ -83,7 +92,18 @@ def signup():
     except Exception as error:
         logging.info(error)
         return  jsonify({'message':'Error: '+ str(error)})
-         
+
+@app.route('/validate', methods=["GET"])
+def activate_user():
+        token = request.args.get("token", default="", type=str)
+        decoded_token = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+        query = {"email":decoded_token['email']}
+        update_query = {"$set": {"email":decoded_token['email'], "verified":True}}
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                db.user.update_one(query, update_query)
+                return redirect("http://www.example.com", code=200)
+        
 @app.route('/signin', methods=["POST"])
 def signin():
     try:
