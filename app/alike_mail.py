@@ -1,15 +1,20 @@
-
-password = "jfmontes610-314"
-mail = "jfmontes610@ieszaidinvergeles.org"
-
 import smtplib, ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from messages import *
+import configparser
+import os
 
-sender_email = mail
+
+MAIL_USERNAME = os.environ['MAIL_USERNAME']
+config = configparser.ConfigParser()
+config.read('/run/secrets/secret')
+MAIL_PASSWORD = config['AUTH']['MAIL_PASSWORD']
+
+
+sender_email = MAIL_USERNAME
 message = MIMEMultipart("alternative")
-
+ 
 def request_confirmation(receiver_email, username, confirmation_url):
     message["Subject"] = "Alike | Email Confirmation"
     message["From"] = sender_email
@@ -35,7 +40,7 @@ def send_mail(sender_email, receiver_email, text, html):
     # Create secure connection with server and send email
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
-        server.login(sender_email, password)
+        server.login(MAIL_USERNAME, MAIL_PASSWORD)
         server.sendmail(
             sender_email, receiver_email, message.as_string()
         )

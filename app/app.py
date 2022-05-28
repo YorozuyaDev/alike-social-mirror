@@ -11,20 +11,20 @@ import os
 import json
 import requests
 import statusboard as stb
+import configparser
 from alike_mail import *
 
 logging.basicConfig(level=logging.DEBUG)
 app = Flask(__name__)
 
-with open('/run/secrets/jwt_token') as secret_file:
-        JWT_SECRET = secret_file.read()
-
+JWT_SECRET=""
 EXP_TOKEN = int(os.environ['EXP_TOKEN'])
 NAME_SERVICE = os.environ['NAME_SERVICE']
 DB_ENDPOINT = 'alike-mongodb'
 DB_PORT = int(os.environ['DB_PORT'])
-
-
+config = configparser.ConfigParser()
+config.read('/run/secrets/secret')
+JWT_SECRET = config['AUTH']['JWT_SECRET']
 app.logger.info(f"EXPIRATION: {EXP_TOKEN}")
 app.logger.info(f"DB CONNECTED: {DB_ENDPOINT}")
 
