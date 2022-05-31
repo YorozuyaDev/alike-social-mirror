@@ -71,7 +71,8 @@ def signup():
             "password": request.json['password'],
             "email": request.json['email'],
             "bio": request.json['bio'],
-            "following": [],    
+            "following": [],
+            "saved": [],
             "verified": False,
             "disabled": False
         }
@@ -411,6 +412,21 @@ def unfollow(username):
 
         return make_response(jsonify({"message":"could not unfollow"}), 200)
 
+@app.route('/save/<id_list>', methods=["POST"])     
+def save(id_list):
+        token = request.headers.get('Authorization')
+        decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
+        user = decoded_token['public_id']
+
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"username":user}
+                update_query = {"$push": {"saved":id_list}}
+                db.user.update_one(query, update_query)
+                return make_response(jsonify({"message":"saved"}), 200)
+
+        return make_response(jsonify({"message":"could not save"}), 200)
+        
 def init_database():
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
