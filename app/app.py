@@ -257,7 +257,7 @@ def change_password():
             return make_response(jsonify({'message' : 'token invalid'}), 403)
 
 
-@app.route('/<username>', methods=["GET"])     
+@app.route('/user/<username>', methods=["GET"])     
 def show_profile(username):
         
         with MongoClient(DB_ENDPOINT, DB_PORT) as client:
@@ -426,7 +426,23 @@ def save(id_list):
                 return make_response(jsonify({"message":"saved"}), 200)
 
         return make_response(jsonify({"message":"could not save"}), 200)
-        
+
+@app.route('/save/<id_list>', methods=["DELETE"])     
+def unsave(id_list):
+        token = request.headers.get('Authorization')
+        decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
+        user = decoded_token['public_id']
+
+        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                db = client.users
+                query = {"username":user}
+                update_query = {"$pull": {"saved":id_list}}
+                res_query = db.user.update_one(query, update_query)
+                if res_query.modified_count:
+                        return make_response(jsonify({"message":"removed from saved list"}), 200)
+
+        return make_response(jsonify({"message":"could not removed"}), 200)
+
 def init_database():
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
         db = client.users
