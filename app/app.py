@@ -86,27 +86,32 @@ def signup():
              db.user.insert_one(new_user);
              activation_url = generate_url({'email':new_user['email']})
              request_confirmation(new_user['email'], new_user['username'], activation_url)
-             return jsonify({'message':'user added'})
+             return  make_response(jsonify({'message' : 'user added'}), 201)
      
     except ValidationError as error:
          logging.info(error)
-         return  jsonify({'message':'error de validación'})
+         return  make_response(jsonify({'error' : 'validation error'}), 400)
 
     except Exception as error:
         logging.info(error)
-        return  jsonify({'message':'Error: '+ str(error)})
+        return make_response(jsonify({'error' : str(error)}), 500)
 
 @app.route('/validate', methods=["GET"])
 def activate_user():
-        token = request.args.get("token", default="", type=str)
-        decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
-        query = {"email":decoded_token['email']}
-        update_query = {"$set": {"email":decoded_token['email'], "verified":True}}
-        with MongoClient(DB_ENDPOINT, DB_PORT) as client:
-                db = client.users
-                db.user.update_one(query, update_query)
-                return redirect("http://www.example.com", code=200)
-        
+        try:
+                token = request.args.get("token", default="", type=str)
+                decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
+                query = {"email":decoded_token['email']}
+                update_query = {"$set": {"email":decoded_token['email'], "verified":True}}
+
+                with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                        db = client.users
+                        db.user.update_one(query, update_query)
+                        return redirect("http://www.example.com", code=200)
+
+        except Exception as error:
+                return make_response(jsonify({'error' : str(error)}), 500)
+
 @app.route('/signin', methods=["POST"])
 def signin():
     try:
@@ -132,16 +137,15 @@ def signin():
                 }, JWT_SECRET)
                 return make_response(jsonify({'token' : token}), 201)
             else:
-                return jsonify({"message":"usuario o contraseña incorrectos"})
+                return jsonify({"error" : "user or password incorrect"})
 
     except ValidationError as error:
         logging.info(error)
-        return  jsonify({'message':'error de validación'})
+        return make_response(jsonify({'error' : 'validation error'}), 500)
 
     except Exception as error:
         logging.info(error)
-        return  jsonify({'message':'Error: '+error})
-
+        return make_response(jsonify({'error' : str(error)}), 500)
     
 @app.route('/auth', methods=["GET"])
 def verify_token():
@@ -161,11 +165,11 @@ def verify_token():
                 return make_response(jsonify({'public_id' : decoded_token['public_id'],
                                               'token':fresh_token}), 200)
         else:
-             return make_response(jsonify({'message' : 'unauthorized'}), 401)
+             return make_response(jsonify({'error' : 'unauthorized'}), 401)
 
     except Exception as error:
         app.logger.error(error)
-        return make_response(jsonify({'message' : 'unauthorized'}), 401)
+        return make_response(jsonify({'error' : 'unauthorized'}), 401)
 
 
 @app.route('/password_token', methods=["GET"])
@@ -212,11 +216,11 @@ def password_token():
                       
     except ValidationError as error:
         logging.info(error)
-        return  jsonify({'message':'error de validación'})
+        return make_response(jsonify({'error': 'validation error'}), 400)
 
     except Exception as error:
         logging.info(error)
-        return  jsonify({'message':'Error: '+str(error)})
+        return make_response(jsonify({'error': str(error)}), 400)
     
 @app.route('/change_password', methods=["POST"])
 def change_password():
@@ -238,23 +242,23 @@ def change_password():
         query_result = db.user.find_one(query)
 
         if not query_result:
-            return make_response(jsonify({'message' : 'not found'}), 404)
+                return make_response(jsonify({'error' : 'not found'}), 404)
 
         elif query_result['password'] == decoded_token['old_password']:        
-            m = hashlib.new('sha256')
-            m.update(request.json['password'].encode('utf-8'))
-            hashed_password = m.hexdigest()
+                m = hashlib.new('sha256')
+                m.update(request.json['password'].encode('utf-8'))
+                hashed_password = m.hexdigest()
 
-            if hashed_password == query_result['password']:
-                return jsonify({"message":"cannot use the same password"})
+                if hashed_password == query_result['password']:
+                        return make_response(jsonify({'error' : 'cannot use the same password'}), 403)
 
-            update_query = {"$set": {"email":decoded_token['email']
-                                     , "password": hashed_password}}
-            db.user.update_one(query, update_query)
-            return jsonify({"message":"usuario actualizado"})
+                update_query = {"$set": {"email":decoded_token['email']
+                                         , "password": hashed_password}}
+                db.user.update_one(query, update_query)
+                return make_response(jsonify({'message' : 'password updated'}), 200)
 
         else:
-            return make_response(jsonify({'message' : 'token invalid'}), 403)
+                return make_response(jsonify({'error' : 'token invalid'}), 403)
 
 
 @app.route('/user/<username>', methods=["GET"])     
@@ -272,6 +276,8 @@ def show_profile(username):
                                 "following": query_result['following']
                                 }
                         return make_response(jsonify(user), 200)
+                else:
+                        return make_response(jsonify({'error' : 'user not found'}), 404)
 
                         
 @app.route('/user', methods=["PUT"])     
@@ -283,12 +289,13 @@ def edit_profile():
         decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
         app.logger.info(decoded_token)
         username = decoded_token['public_id']
+
         if not is_valid(decoded_token['exp']):
-            return make_response(jsonify({'message' : 'unauthorized'}), 401)
+                return make_response(jsonify({'error' : 'unauthorized'}), 401)
 
     except Exception as error:
         app.logger.error(error)
-        return make_response(jsonify({'message' : 'unauthorized'}), 401)
+        return make_response(jsonify({'error' : 'unauthorized'}), 401)
 
     
     profile = {
@@ -322,11 +329,11 @@ def edit_profile():
                
     except ValidationError as error:
         logging.info(error)
-        return  jsonify({'message':'error de validación'})
+        return make_response(jsonify({'error': 'validation error'}), 400)
 
     except Exception as error:
         logging.info(error)
-        return  jsonify({'message':'Error: '+str(error)})
+        return make_response(jsonify({'error' : str(error)}), 401)
 
 @app.route('/user', methods=["DELETE"])     
 def delete_profile():
@@ -346,11 +353,11 @@ def delete_profile():
                 db.user.update_one(query, update_query)
                 return make_response(jsonify({'message' : 'user deleted'}), 200)
         else:
-            return make_response(jsonify({'message' : 'unauthorized'}), 401)
+            return make_response(jsonify({'error' : 'unauthorized'}), 401)
         
     except Exception as error:
         app.logger.error(error)
-        return make_response(jsonify({'message' : 'error deleting user'}), 500)
+        return make_response(jsonify({'error' : 'error deleting user'}), 500)
 
 
 @app.route('/search/<username>', methods=["GET"])     
@@ -364,7 +371,7 @@ def search_profile(username):
                 if query_result:
                         return make_response(dumps(query_result), 200)
 
-                return make_response(jsonify({"message":"user not found"}), 404)
+                return make_response(jsonify({"error":"user not found"}), 404)
 
 @app.route('/follow/<username>', methods=["POST"])     
 def follow(username):
@@ -382,7 +389,7 @@ def follow(username):
                 query_result = db.user.find_one(query)
                 
                 if not db.user.find_one({"username":username}):
-                        return make_response(jsonify({"message":"user does not exist"}), 404)
+                        return make_response(jsonify({"error":"user not found"}), 404)
 
                 following =  query_result['following']
                 
@@ -401,16 +408,16 @@ def unfollow(username):
         user = decoded_token['public_id']  
         
         if user == username:
-                return make_response({"message":"cannot unfollow yourself"}, 400)
+                return make_response({"error": "cannot unfollow yourself"}, 400)
 
         with MongoClient(DB_ENDPOINT, DB_PORT) as client:
                 db = client.users
                 query = {"username":user}
                 update_query = {"$pull": {"following":username}}
                 db.user.update_one(query, update_query)
-                return make_response(jsonify({"message":"unfollowed"}), 200)
+                return make_response(jsonify({"message": "unfollowed"}), 200)
 
-        return make_response(jsonify({"message":"could not unfollow"}), 200)
+        return make_response(jsonify({"error":"could not unfollow"}), 500)
 
 @app.route('/save/<id_list>', methods=["POST"])     
 def save(id_list):
@@ -425,7 +432,7 @@ def save(id_list):
                 db.user.update_one(query, update_query)
                 return make_response(jsonify({"message":"saved"}), 200)
 
-        return make_response(jsonify({"message":"could not save"}), 200)
+        return make_response(jsonify({"errpr":"could not save"}), 500)
 
 @app.route('/save/<id_list>', methods=["DELETE"])     
 def unsave(id_list):
@@ -441,7 +448,7 @@ def unsave(id_list):
                 if res_query.modified_count:
                         return make_response(jsonify({"message":"removed from saved list"}), 200)
 
-        return make_response(jsonify({"message":"could not removed"}), 200)
+        return make_response(jsonify({"error":"could not removed"}), 500)
 
 def init_database():
     with MongoClient(DB_ENDPOINT, DB_PORT) as client:
