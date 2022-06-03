@@ -187,7 +187,7 @@ def password_token():
                 db = client.users
                 query = {"email":user['email']}
                 query_result = db.user.find_one(query)
-
+               
         #Second type, recover with last password
         elif 'password' in request.json:
             token = request.headers.get('Authorization')
@@ -212,6 +212,11 @@ def password_token():
             'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN),
             'old_password': query_result['password']
         }, JWT_SECRET)
+
+        if 'email' in request.json:
+                change_password_url = "http://localhost:2000/reset_password?token="+token
+                request_password(query_result['email'], change_password_url)
+         
         return make_response(jsonify({'token' : token}), 201)
                       
     except ValidationError as error:

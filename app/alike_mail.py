@@ -44,3 +44,14 @@ def send_mail(sender_email, receiver_email, text, html):
         server.sendmail(
             sender_email, receiver_email, message.as_string()
         )
+
+def request_password(receiver_email, change_password_url):
+    message["Subject"] = "Alike | Password Change"
+    message["From"] = sender_email
+    message["To"] = receiver_email
+
+    # Create the plain-text and HTML version of your message
+    text =  change_password_text.format(change_password_url=change_password_url)
+    html = change_password_html.format(change_password_url=change_password_url)
+    send_mail(sender_email, receiver_email, text, html)
+    return True
