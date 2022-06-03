@@ -293,6 +293,7 @@ def edit_profile():
         if not is_valid(decoded_token['exp']):
                 return make_response(jsonify({'error' : 'unauthorized'}), 401)
 
+        
     except Exception as error:
         app.logger.error(error)
         return make_response(jsonify({'error' : 'unauthorized'}), 401)
@@ -311,6 +312,16 @@ def edit_profile():
                 'exp' : datetime.utcnow() + timedelta(minutes = EXP_TOKEN)
             }, JWT_SECRET)
             
+            #update messages
+            with MongoClient(DB_ENDPOINT, DB_PORT) as client:
+                    db = client.messenger
+                    query = {"from": username}
+                    update_query = {"$set": {"from":  edited_profile['username']}}
+                    db.message.update_one(query, update_query)
+                    query = {"to": username}
+                    update_query = {"$set": {"to":  edited_profile['username']}}
+                    db.message.update_one(query, update_query)
+                    
         if 'bio' in request.json:
             edited_profile['bio'] = request.json['bio']
 
