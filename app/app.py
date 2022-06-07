@@ -32,7 +32,10 @@ app.logger.info(f"DB CONNECTED: {DB_ENDPOINT}")
 schema = {
     "type":"object",
     "properties": {
-        "username": {"type": "string"},
+        "username": {
+            "type":"string",
+            "pattern":'^[a-zA-Z0-9]([._-](?![._-])|[a-zA-Z0-9]){3,18}[a-zA-Z0-9]$'
+            },
         "password": {
             "type":"string",
             "pattern":'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,15}$'
@@ -40,8 +43,7 @@ schema = {
         "email": {
             "type": "string",
             "pattern": '^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$'
-        },
-        "bio": {"type": "string"}
+        },        "bio": {"type": "string"}
     }
 }
 
