@@ -76,7 +76,9 @@ def signup():
             "following": [],
             "saved": [],
             "verified": False,
-            "disabled": False
+            "disabled": False,
+            "created_at":datetime.now().strftime("%Y-%m-%d"),
+            "updated_at":datetime.now().strftime("%Y-%m-%d")
         }
 
 
@@ -104,7 +106,8 @@ def activate_user():
                 token = request.args.get("token", default="", type=str)
                 decoded_token = jwt.decode(token, JWT_SECRET, algorithms="HS256")
                 query = {"email":decoded_token['email']}
-                update_query = {"$set": {"email":decoded_token['email'], "verified":True}}
+                update_query = {"$set": {"email":decoded_token['email'], "verified":True,
+                                         "updated_at":datetime.now().strftime("%Y-%m-%d")}}
 
                 with MongoClient(DB_ENDPOINT, DB_PORT) as client:
                         db = client.users
@@ -260,7 +263,9 @@ def change_password():
                         return make_response(jsonify({'error' : 'cannot use the same password'}), 403)
 
                 update_query = {"$set": {"email":decoded_token['email']
-                                         , "password": hashed_password}}
+                                         , "password": hashed_password,
+                                         "updated_at":datetime.now().strftime("%Y-%m-%d")}}
+
                 db.user.update_one(query, update_query)
                 return make_response(jsonify({'message' : 'password updated'}), 200)
 
@@ -280,7 +285,8 @@ def show_profile(username):
                         user = {
                                 "username": query_result['username'],
                                 "bio": query_result['bio'],
-                                "following": query_result['following']
+                                "following": query_result['following'],
+                                "verified": query_result['verified']
                                 }
                         return make_response(jsonify(user), 200)
                 else:
@@ -309,7 +315,7 @@ def edit_profile():
     profile = {
         "username":username
     }
-    edited_profile = {}
+    edited_profile = {"updated_at":datetime.now().strftime("%Y-%m-%d")}
     try:
 
         if 'username' in request.json:
@@ -450,7 +456,7 @@ def save(id_list):
                 db.user.update_one(query, update_query)
                 return make_response(jsonify({"message":"saved"}), 200)
 
-        return make_response(jsonify({"errpr":"could not save"}), 500)
+        return make_response(jsonify({"error":"could not save"}), 500)
 
 @app.route('/save/<id_list>', methods=["DELETE"])     
 def unsave(id_list):
